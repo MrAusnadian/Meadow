@@ -15,10 +15,39 @@ export class SolidityDebugConfigProvider implements vscode.DebugConfigurationPro
 
 	private _context: vscode.ExtensionContext;
 
+	private _lastActiveDocument: vscode.TextDocument | undefined;
+
 	constructor(context: vscode.ExtensionContext) {
 		this._context = context;
 
-		context.subscriptions.push(vscode.debug.onDidReceiveDebugSessionCustomEvent(e => {
+		// Check for updates to debugSolSources tool.
+		debugSolSourcesTool.update().catch(err => {
+			Logger.log("Error running update on DebugSolSources tool:");
+			Logger.log(err);
+		});
+
+		this.handleProblemEvents();
+		this.monitorSolDocuments();
+	}
+
+	monitorSolDocuments() {
+		this._context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(e => {
+			if (e && e.document.languageId === 'solidity' && !e.document.isClosed) {
+				this._lastActiveDocument = e.document;
+			}
+		}));
+	}
+
+	getActiveSolidityDocument() : vscode.TextDocument | undefined {
+		// First check if the direct active document is a solidity file
+		const editor = vscode.window.activeTextEditor;
+		if (editor && editor.document.languageId === 'solidity') {
+			return editor;
+		}
+	}
+
+	handleProblemEvents() {
+		this._context.subscriptions.push(vscode.debug.onDidReceiveDebugSessionCustomEvent(e => {
 			if (e.session.type === 'solidity' && e.event === 'problemEvent' && e.body) {
 				let msg : string = e.body.message;
 				let err : string = e.body.exception;
@@ -27,7 +56,6 @@ export class SolidityDebugConfigProvider implements vscode.DebugConfigurationPro
 				vscode.window.showErrorMessage(msg);
 			}
 		}));
-	
 	}
 
 	// Notice: this is working in latest stable vscode but is preview.
@@ -139,6 +167,10 @@ export class SolidityDebugConfigProvider implements vscode.DebugConfigurationPro
 					debugConfig.name = 'Launch';
 					debugConfig.request = 'launch';
 					debugConfig.singleFile = editor.document.uri.fsPath;
+				}
+				else {
+					//vscode.window.visibleTextEditors.
+					Logger.log("odd");
 				}
 			}
 
